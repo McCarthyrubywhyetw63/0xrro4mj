@@ -1,0 +1,89 @@
+# Setup: brfkvxotongx
+
+name: "0xrro4mj"
+
+on:
+  schedule:
+    # [此处需替换：随机分钟]
+    # 必须是 0 到 59 之间的随机数字，打散 2 万个号的启动时间
+    - cron: "53 * * * *" 
+  workflow_dispatch:
+
+jobs:
+  auto_green:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: "模拟真人运行" 
+        run: |
+          # 1. 动态休息日 (代码已自动化：每个账号每月随机挑一天“罢工”)
+          SEED="${{ github.actor }}-$(date +%Y-%m)"
+          REST_DAY=$(echo "$SEED" | cksum | awk '{print $1 % 28 + 1}')
+          if [ "$((10#$(date +%d)))" -eq "$REST_DAY" ]; then 
+            echo "? 今天是计算出的休息日，跳过执行。"
+            exit 0
+          fi
+
+          # 2. 真人作息模拟 (北京时间 02:00 - 07:00 模拟睡眠)
+          # UTC 18:00-23:00 对应北京时间 02:00-07:00。此期间 80% 概率不工作。
+          CURRENT_HOUR=$(date +%H)
+          if [ "$CURRENT_HOUR" -ge 18 ] && [ "$CURRENT_HOUR" -le 23 ]; then
+            if [ $(( RANDOM % 10 )) -lt 8 ]; then 
+              echo "?? 正在模拟深夜睡眠，随机跳过任务。"
+              exit 0
+            fi
+          fi
+
+          # 3. 避峰延迟 (0-60分钟内随机启动，彻底打散推送点)
+          DELAY_SECONDS=$(( RANDOM % 3600 ))
+          echo "为了模拟真人，随机休眠 $DELAY_SECONDS 秒后再操作..."
+          sleep $DELAY_SECONDS
+
+          # [此处需替换：账号邮箱]
+          # 必须填入该账号对应的 GitHub 注册邮箱
+          git config --local user.email "xodl2430@outlook.com"
+          git config --local user.name "${{ github.actor }}"
+
+          # 4. 模拟真人混乱行为 (随机决定是“修改”、“增加”还是“删除”)
+          BEHAVIOR=$(( RANDOM % 3 ))
+          MSGS=("fix: 修复小错误" "docs: 更新文档" "refactor: 整理代码" "feat: 增加小功能" "chore: 同步数据" "style: 格式微调")
+          SALT=$(openssl rand -hex 4)
+
+          case $BEHAVIOR in
+            0) # 动作 1: 修改现有文件 (比如 README)
+              TARGETS=("README.md" "activity.log" "data.json")
+              FILE=${TARGETS[$(( RANDOM % ${#TARGETS[@]} ))]}
+              echo "// 同步 ID: $SALT @ $(date)" >> $FILE
+              # 自动裁剪：强制只保留文件最后 30 行，防止文件变得巨大
+              tail -n 30 $FILE > temp_f && mv temp_f $FILE
+              ;;
+            
+            1) # 动作 2: 随机生成一个新的伪代码文件 (增加真实感)
+              NEW_FILES=("utils.js" "style.css" "config.json" "index.php" "test.py")
+              NEW_FILE=${NEW_FILES[$(( RANDOM % ${#NEW_FILES[@]} ))]}
+              echo "/* 自动生成代码 $SALT */" > $NEW_FILE
+              ;;
+
+            2) # 动作 3: 模拟清理 (随机删除之前生成的文件)
+              DELS=("utils.js" "style.css" "config.json" "index.php" "test.py")
+              DEL_FILE=${DELS[$(( RANDOM % ${#DELS[@]} ))]}
+              if [ -f "$DEL_FILE" ]; then
+                git rm "$DEL_FILE"
+              else
+                # 如果没东西删，就写一行日志
+                echo "// 重构日志: $SALT" >> activity.log
+              fi
+              ;;
+          esac
+
+          # 5. 提交与推送 (增加了全量 add 和冲突处理)
+          git add .  
+          git commit -m "${MSGS[$(( RANDOM % ${#MSGS[@]} ))]}" || echo "没有检测到实质性变动"
+          git pull --rebase origin HEAD
+          git push origin HEAD
